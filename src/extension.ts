@@ -10,43 +10,65 @@ interface Rule {
 
 let rules: Rule[] = [];
 let statusBarItem: vscode.StatusBarItem;
+let outputChannel: vscode.OutputChannel;
 
 export function activate(context: vscode.ExtensionContext) {
-  statusBarItem = vscode.window.createStatusBarItem(
-    vscode.StatusBarAlignment.Right,
-    100
-  );
-  context.subscriptions.push(statusBarItem);
+  try {
+    // Fallback logging to console
+    console.log("CODEOWNERS extension starting...");
+    
+    // Create output channel for logging
+    outputChannel = vscode.window.createOutputChannel("CODEOWNERS");
+    outputChannel.show();
+    outputChannel.appendLine("CODEOWNERS extension activated");
 
-  // Load CODEOWNERS at startup
-  loadCodeowners();
+    statusBarItem = vscode.window.createStatusBarItem(
+      vscode.StatusBarAlignment.Right,
+      100
+    );
+    context.subscriptions.push(statusBarItem);
 
-  // Update when active editor changes
-  context.subscriptions.push(
-    vscode.window.onDidChangeActiveTextEditor(() => updateStatusBar())
-  );
+    // Load CODEOWNERS at startup
+    loadCodeowners();
 
-  // Update when files change
-  context.subscriptions.push(
-    vscode.workspace.onDidSaveTextDocument((doc) => {
-      if (doc.fileName.toLowerCase().includes("codeowners")) {
-        loadCodeowners();
-        updateStatusBar();
-      }
-    })
-  );
+    // Update when active editor changes
+    context.subscriptions.push(
+      vscode.window.onDidChangeActiveTextEditor(() => updateStatusBar())
+    );
 
-  updateStatusBar();
+    // Update when files change
+    context.subscriptions.push(
+      vscode.workspace.onDidSaveTextDocument((doc) => {
+        if (doc.fileName.toLowerCase().includes("codeowners")) {
+          loadCodeowners();
+          updateStatusBar();
+        }
+      })
+    );
+
+    updateStatusBar();
+    
+    console.log("CODEOWNERS extension activated successfully");
+  } catch (error) {
+    console.error("Error activating CODEOWNERS extension:", error);
+    if (outputChannel) {
+      outputChannel.appendLine(`Error activating extension: ${error}`);
+    }
+  }
+}
+
+function log(message: string) {
+  outputChannel.appendLine(`[${new Date().toISOString()}] ${message}`);
 }
 
 function loadCodeowners() {
   rules = [];
   if (!vscode.workspace.workspaceFolders) {
-    console.log("No workspace folders found");
+    log("No workspace folders found");
     return;
   }
   const rootPath = vscode.workspace.workspaceFolders[0].uri.fsPath;
-  console.log("Workspace root:", rootPath);
+  log(`Workspace root: ${rootPath}`);
 
   // Common CODEOWNERS locations
   const possiblePaths = [
@@ -57,20 +79,24 @@ function loadCodeowners() {
   let fileContent: string | null = null;
   for (const p of possiblePaths) {
     if (fs.existsSync(p)) {
-      fileContent = fs.readFileSync(p, "utf8");
-      console.log(`Loaded CODEOWNERS from: ${p}`);
-      console.log(`File size: ${fileContent.length} characters`);
-      break;
+      try {
+        fileContent = fs.readFileSync(p, "utf8");
+        log(`Loaded CODEOWNERS from: ${p}`);
+        log(`File size: ${fileContent.length} characters`);
+        break;
+      } catch (error) {
+        log(`Error reading CODEOWNERS file: ${error}`);
+      }
     }
   }
 
   if (!fileContent) {
-    console.log("No CODEOWNERS file found in:", possiblePaths);
+    log(`No CODEOWNERS file found in: ${possiblePaths.join(", ")}`);
     return;
   }
 
   const lines = fileContent.split("\n");
-  console.log(`Total lines in CODEOWNERS: ${lines.length}`);
+  log(`Total lines in CODEOWNERS: ${lines.length}`);
   
   let validRules = 0;
   for (let line of lines) {
@@ -89,16 +115,16 @@ function loadCodeowners() {
     
     // Log first few rules to verify parsing
     if (validRules <= 5) {
-      console.log(`Rule ${validRules}: pattern="${pattern}", owners=[${owners.join(", ")}]`);
+      log(`Rule ${validRules}: pattern="${pattern}", owners=[${owners.join(", ")}]`);
     }
   }
   
-  console.log(`Loaded ${rules.length} valid rules from CODEOWNERS`);
+  log(`Loaded ${rules.length} valid rules from CODEOWNERS`);
 }
 
 function findOwners(filePath: string): string[] {
   if (!rules.length) {
-    console.log("No rules loaded, returning empty array");
+    log("No rules loaded, returning empty array");
     return [];
   }
 
@@ -109,44 +135,52 @@ function findOwners(filePath: string): string[] {
   const root = vscode.workspace.workspaceFolders[0].uri.fsPath;
   const relative = path.relative(root, filePath);
   
-  console.log(`Looking for owners for file: ${filePath}`);
-  console.log(`Relative path: ${relative}`);
-  console.log(`Total rules to check: ${rules.length}`);
+  log(`Looking for owners for file: ${filePath}`);
+  log(`Relative path: ${relative}`);
+  log(`Total rules to check: ${rules.length}`);
 
   let matchedOwners: string[] = [];
 
   for (const rule of rules) {
-    const isMatch = minimatch(relative, rule.pattern, { dot: true });
-    if (isMatch) {
-      console.log(`Pattern "${rule.pattern}" matched for "${relative}"`);
-      matchedOwners = rule.owners;
+    try {
+      const isMatch = minimatch(relative, rule.pattern, { dot: true });
+      if (isMatch) {
+        log(`Pattern "${rule.pattern}" matched for "${relative}"`);
+        matchedOwners = rule.owners;
+      }
+    } catch (error) {
+      log(`Error matching pattern "${rule.pattern}": ${error}`);
     }
   }
 
-  console.log(`Final matched owners:`, matchedOwners);
+  log(`Final matched owners: ${matchedOwners.join(", ")}`);
   return matchedOwners;
 }
 
 function updateStatusBar() {
   const editor = vscode.window.activeTextEditor;
   if (!editor) {
-    console.log("No active editor, hiding status bar");
+    log("No active editor, hiding status bar");
     statusBarItem.hide();
     return;
   }
 
-  console.log(`Updating status bar for: ${editor.document.fileName}`);
+  log(`Updating status bar for: ${editor.document.fileName}`);
   const owners = findOwners(editor.document.fileName);
   
   if (owners.length > 0) {
     statusBarItem.text = `👥 Owners: ${owners.join(", ")}`;
     statusBarItem.show();
-    console.log(`Status bar updated with owners: ${owners.join(", ")}`);
+    log(`Status bar updated with owners: ${owners.join(", ")}`);
   } else {
     statusBarItem.text = `👥 No owners found`;
     statusBarItem.show();
-    console.log(`Status bar updated: No owners found`);
+    log(`Status bar updated: No owners found`);
   }
 }
 
-export function deactivate() {}
+export function deactivate() {
+  if (outputChannel) {
+    outputChannel.dispose();
+  }
+}
