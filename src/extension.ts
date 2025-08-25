@@ -143,7 +143,7 @@ function findOwners(filePath: string): string[] {
 
   for (const rule of rules) {
     try {
-      const isMatch = minimatch(relative, rule.pattern, { dot: true });
+      const isMatch = minimatch(relative, normalizePattern(rule.pattern), { dot: true });
       if (isMatch) {
         log(`Pattern "${rule.pattern}" matched for "${relative}"`);
         matchedOwners = rule.owners;
@@ -155,6 +155,22 @@ function findOwners(filePath: string): string[] {
 
   log(`Final matched owners: ${matchedOwners.join(", ")}`);
   return matchedOwners;
+}
+
+function normalizePattern(pattern: string): string {
+	let p = pattern.trim();
+
+	// Strip leading slash (GitHub style vs minimatch)
+	if (p.startsWith("/")) {
+	  p = p.slice(1);
+	}
+  
+	// If ends with "/", treat as directory → add **
+	if (p.endsWith("/")) {
+	  p += "**";
+	}
+  
+	return p;
 }
 
 function updateStatusBar() {
