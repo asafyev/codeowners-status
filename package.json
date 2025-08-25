@@ -15,12 +15,6 @@
   ],
   "main": "./dist/extension.js",
   "contributes": {
-    "commands": [
-      {
-        "command": "codeowners.helloWorld",
-        "title": "Hello World"
-      }
-    ],
     "configuration": {
       "title": "CODEOWNERS Status",
       "properties": {
