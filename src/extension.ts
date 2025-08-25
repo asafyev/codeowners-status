@@ -15,12 +15,12 @@ let outputChannel: vscode.OutputChannel;
 export function activate(context: vscode.ExtensionContext) {
   try {
     // Fallback logging to console
-    console.log("CODEOWNERS extension starting...");
+    console.log("CODEOWNERS Status extension starting...");
     
     // Create output channel for logging
-    outputChannel = vscode.window.createOutputChannel("CODEOWNERS");
+    outputChannel = vscode.window.createOutputChannel("CODEOWNERS Status");
     outputChannel.show();
-    outputChannel.appendLine("CODEOWNERS extension activated");
+    outputChannel.appendLine("CODEOWNERS Status extension activated");
 
     statusBarItem = vscode.window.createStatusBarItem(
       vscode.StatusBarAlignment.Right,
@@ -48,11 +48,11 @@ export function activate(context: vscode.ExtensionContext) {
 
     updateStatusBar();
     
-    console.log("CODEOWNERS extension activated successfully");
+    console.log("CODEOWNERS Status extension activated successfully");
   } catch (error) {
-    console.error("Error activating CODEOWNERS extension:", error);
+    console.error("Error activating CODEOWNERS Status extension:", error);
     if (outputChannel) {
-      outputChannel.appendLine(`Error activating extension: ${error}`);
+      outputChannel.appendLine(`Error activating CODEOWNERS Status extension: ${error}`);
     }
   }
 }

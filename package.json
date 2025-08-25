@@ -1,7 +1,7 @@
 {
-  "name": "codeowners",
-  "displayName": "codeowners",
-  "description": "Github CODEOWNERS file support in VS Code",
+  "name": "codeowners-status",
+  "displayName": "CODEOWNERS status",
+  "description": "Show owning teams from CODEOWNERS file in the status bar.",
   "version": "0.0.1",
   "engines": {
     "vscode": "^1.99.0"
