@@ -20,7 +20,32 @@
         "command": "codeowners.helloWorld",
         "title": "Hello World"
       }
-    ]
+    ],
+    "configuration": {
+      "title": "CODEOWNERS Status",
+      "properties": {
+        "codeowners.showDebugLogs": {
+          "type": "boolean",
+          "default": false,
+          "description": "Show debug logs in output channel"
+        },
+        "codeowners.statusBarPriority": {
+          "type": "number",
+          "default": 100,
+          "minimum": 0,
+          "maximum": 1000,
+          "description": "Priority of the status bar item (higher numbers appear more to the left)"
+        },
+        "codeowners.additionalCodeownersPaths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Additional paths to search for CODEOWNERS files (relative to workspace root)"
+        }
+      }
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run package",
