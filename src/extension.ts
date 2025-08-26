@@ -6,12 +6,15 @@ import minimatch from "minimatch";
 interface Rule {
   pattern: string;
   owners: string[];
+  lineNumber: number;
+  filePath?: string;
 }
 
 interface ExtensionConfig {
   showDebugLogs: boolean;
   statusBarPriority: number;
   additionalCodeownersPaths: string[];
+  allowMissingOwners: boolean;
 }
 
 class CodeownersExtension {
@@ -20,19 +23,20 @@ class CodeownersExtension {
   private outputChannel: vscode.OutputChannel;
   private disposables: vscode.Disposable[] = [];
   private lastCodeownersModified: number = 0;
-  private isInitialized: boolean = false;
+  private config: ExtensionConfig;
+  private currentMatchedRule: Rule | null = null;
 
   constructor() {
     this.outputChannel = vscode.window.createOutputChannel("CODEOWNERS Status");
+    this.config = this.loadConfig();
     this.statusBarItem = vscode.window.createStatusBarItem(
       vscode.StatusBarAlignment.Right,
-      this.getConfig().statusBarPriority
+      this.config.statusBarPriority
     );
   }
 
   public activate(context: vscode.ExtensionContext): void {
     try {
-      this.outputChannel.show();
       this.log("CODEOWNERS Status extension activated");
 
       // Validate workspace
@@ -62,8 +66,26 @@ class CodeownersExtension {
         })
       );
 
+      // Listen for config changes and refresh cache
+      this.disposables.push(
+        vscode.workspace.onDidChangeConfiguration((e) => {
+          if (e.affectsConfiguration('codeowners')) {
+            this.config = this.loadConfig();
+            this.log('Configuration updated');
+            // Reload CODEOWNERS if additional paths changed
+            this.loadCodeowners();
+          }
+        })
+      );
+
+      // Register command to open CODEOWNERS file
+      this.disposables.push(
+        vscode.commands.registerCommand('codeowners.openCodeownersFile', () => {
+          this.openCodeownersFile();
+        })
+      );
+
       this.updateStatusBar();
-      this.isInitialized = true;
       
       this.log("CODEOWNERS Status extension activated successfully");
     } catch (error) {
@@ -90,12 +112,13 @@ class CodeownersExtension {
     }
   }
 
-  private getConfig(): ExtensionConfig {
+  private loadConfig(): ExtensionConfig {
     const config = vscode.workspace.getConfiguration('codeowners');
     return {
       showDebugLogs: config.get('showDebugLogs', false),
       statusBarPriority: config.get('statusBarPriority', 100),
       additionalCodeownersPaths: config.get('additionalCodeownersPaths', []),
+      allowMissingOwners: config.get('allowMissingOwners', false),
     };
   }
 
@@ -121,13 +144,12 @@ class CodeownersExtension {
     const logMessage = `[${timestamp}] [${level.toUpperCase()}] ${message}`;
     
     this.outputChannel.appendLine(logMessage);
-    
-    // Only show debug logs if enabled
-    if (this.getConfig().showDebugLogs || level === 'error' || level === 'warn') {
+  
+    if (this.config.showDebugLogs || level === 'error' || level === 'warn') {
       this.outputChannel.show();
     }
     
-    // Log errors to console for debugging
+    // Log errors and warnings to console
     if (level === 'error') {
       console.error(logMessage);
     } else if (level === 'warn') {
@@ -163,7 +185,7 @@ class CodeownersExtension {
         return;
       }
 
-      this.parseCodeownersContent(fileContent);
+      this.parseCodeownersContent(fileContent, codeownersPath);
       this.lastCodeownersModified = Date.now();
       
     } catch (error) {
@@ -182,11 +204,10 @@ class CodeownersExtension {
   }
 
   private findCodeownersFile(rootPath: string): string | null {
-    const config = this.getConfig();
     const possiblePaths = [
       path.join(rootPath, "CODEOWNERS"),
       path.join(rootPath, ".github", "CODEOWNERS"),
-      ...config.additionalCodeownersPaths.map(p => path.join(rootPath, p))
+      ...this.config.additionalCodeownersPaths.map(p => path.join(rootPath, p))
     ];
 
     for (const p of possiblePaths) {
@@ -221,11 +242,6 @@ class CodeownersExtension {
     try {
       const fileContent = fs.readFileSync(filePath, "utf8");
       
-      // Validate content
-      if (typeof fileContent !== 'string') {
-        throw new Error("File content is not a string");
-      }
-      
       if (fileContent.length === 0) {
         this.log("CODEOWNERS file is empty", 'warn');
         return null;
@@ -249,7 +265,7 @@ class CodeownersExtension {
     }
   }
 
-  private parseCodeownersContent(content: string): void {
+  private parseCodeownersContent(content: string, codeownersFilePath: string): void {
     try {
       if (!content || typeof content !== 'string') {
         throw new Error("Invalid content provided");
@@ -279,13 +295,37 @@ class CodeownersExtension {
             continue;
           }
           
+          // Check if owners are missing and if that's allowed
+          if (owners.length === 0) {
+            if (this.config.allowMissingOwners) {
+              // Use empty array for patterns without owners (indicates anyone can approve)
+              this.rules.push({ 
+                pattern, 
+                owners: [], 
+                lineNumber: lineNumber + 1, 
+                filePath: codeownersFilePath 
+              });
+              validRules++;
+              this.log(`Pattern without owners on line ${lineNumber + 1}: "${pattern}" (anyone can approve)`);
+            } else {
+              this.log(`Pattern without owners on line ${lineNumber + 1}: "${pattern}" (skipped - enable allowMissingOwners to include)`, 'warn');
+              invalidLines++;
+            }
+            continue;
+          }
+          
           if (!this.isValidOwners(owners)) {
             this.log(`Invalid owners on line ${lineNumber + 1}: [${owners.join(", ")}]`, 'warn');
             invalidLines++;
             continue;
           }
 
-          this.rules.push({ pattern, owners });
+          this.rules.push({ 
+            pattern, 
+            owners, 
+            lineNumber: lineNumber + 1, 
+            filePath: codeownersFilePath 
+          });
           validRules++;
         } catch (error) {
           this.log(`Error parsing line ${lineNumber + 1}: ${error}`, 'warn');
@@ -315,7 +355,7 @@ class CodeownersExtension {
     }
     
     // Basic validation - pattern should contain valid characters
-    if (!/^[a-zA-Z0-9\/\*\?\[\]{}!@#$%^&()_+\-=\s\.]+$/.test(pattern)) {
+    if (!/^[a-zA-Z0-9\/\*\?\.\-_]+$/.test(pattern)) {
       return false;
     }
     
@@ -341,7 +381,7 @@ class CodeownersExtension {
     }
     
     const lowerFileName = fileName.toLowerCase();
-    return lowerFileName.includes("codeowners") || lowerFileName.endsWith("owners");
+    return lowerFileName.includes("codeowners");
   }
 
   private findOwners(filePath: string): string[] {
@@ -375,6 +415,8 @@ class CodeownersExtension {
       this.log(`Total rules to check: ${this.rules.length}`);
 
       let matchedOwners: string[] = [];
+      let hasMatchedPattern = false;
+      this.currentMatchedRule = null;
 
       for (const rule of this.rules) {
         try {
@@ -384,14 +426,22 @@ class CodeownersExtension {
           if (isMatch) {
             this.log(`Pattern "${rule.pattern}" matched for "${relative}"`);
             matchedOwners = rule.owners;
+            hasMatchedPattern = true;
+            this.currentMatchedRule = rule;
           }
         } catch (error) {
           this.log(`Error matching pattern "${rule.pattern}": ${error}`, 'error');
         }
       }
 
-      this.log(`Final matched owners: ${matchedOwners.join(", ")}`);
-      return matchedOwners;
+      if (hasMatchedPattern && matchedOwners.length === 0) {
+        this.log(`Final matched owners: none (anyone can approve)`);
+        // Return special marker to indicate "anyone can approve"
+        return ['@anyone'];
+      } else {
+        this.log(`Final matched owners: ${matchedOwners.join(", ")}`);
+        return matchedOwners;
+      }
       
     } catch (error) {
       this.log(`Error finding owners: ${error}`, 'error');
@@ -444,11 +494,23 @@ class CodeownersExtension {
       const owners = this.findOwners(fileName);
       
       if (owners.length > 0) {
-        this.statusBarItem.text = `👥 Owners: ${owners.join(", ")}`;
-        this.statusBarItem.show();
-        this.log(`Status bar updated with owners: ${owners.join(", ")}`);
+        if (owners[0] === '@anyone') {
+          this.statusBarItem.text = `👥 No owners`;
+          this.statusBarItem.command = 'codeowners.openCodeownersFile';
+          this.statusBarItem.tooltip = 'Click to open CODEOWNERS file at matching rule';
+          this.statusBarItem.show();
+          this.log(`Status bar updated: No owners`);
+        } else {
+          this.statusBarItem.text = `👥 Owners: ${owners.join(", ")}`;
+          this.statusBarItem.command = 'codeowners.openCodeownersFile';
+          this.statusBarItem.tooltip = 'Click to open CODEOWNERS file at matching rule';
+          this.statusBarItem.show();
+          this.log(`Status bar updated with owners: ${owners.join(", ")}`);
+        }
       } else {
         this.statusBarItem.text = `👥 No owners found`;
+        this.statusBarItem.command = undefined; // Remove click action when no owners found
+        this.statusBarItem.tooltip = 'No CODEOWNERS rule found for this file';
         this.statusBarItem.show();
         this.log(`Status bar updated: No owners found`);
       }
@@ -458,6 +520,48 @@ class CodeownersExtension {
       // Show error in status bar
       this.statusBarItem.text = `👥 Error`;
       this.statusBarItem.show();
+    }
+  }
+
+  private async openCodeownersFile(): Promise<void> {
+    try {
+      if (!this.currentMatchedRule) {
+        this.log("No matched rule found for current file", 'warn');
+        vscode.window.showInformationMessage("No CODEOWNERS rule found for the current file");
+        return;
+      }
+
+      const filePath = this.currentMatchedRule.filePath;
+      if (!filePath) {
+        this.log("No file path found for matched rule", 'error');
+        return;
+      }
+
+      // Store the rule we want to navigate to before opening the file
+      const targetRule = this.currentMatchedRule;
+
+      // Open the CODEOWNERS file
+      const document = await vscode.workspace.openTextDocument(filePath);
+      const editor = await vscode.window.showTextDocument(document);
+
+      // Use a small delay to allow the status bar to update for CODEOWNERS file first,
+      // then navigate to the target line
+      setTimeout(() => {
+        // Navigate to the specific line for the original file's rule
+        const lineNumber = targetRule.lineNumber - 1; // Convert to 0-based
+        const range = new vscode.Range(lineNumber, 0, lineNumber, 0);
+        
+        editor.selection = new vscode.Selection(range.start, range.end);
+        editor.revealRange(range, vscode.TextEditorRevealType.InCenter);
+
+        this.log(`Navigated to CODEOWNERS line ${targetRule.lineNumber}: ${targetRule.pattern}`);
+      }, 100); // Small delay to allow status bar update to complete
+
+      this.log(`Opened CODEOWNERS file, will navigate to line ${targetRule.lineNumber}`);
+      
+    } catch (error) {
+      this.log(`Error opening CODEOWNERS file: ${error}`, 'error');
+      vscode.window.showErrorMessage(`Failed to open CODEOWNERS file: ${error}`);
     }
   }
 }

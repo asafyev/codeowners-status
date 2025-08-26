@@ -15,6 +15,13 @@
   ],
   "main": "./dist/extension.js",
   "contributes": {
+    "commands": [
+      {
+        "command": "codeowners.openCodeownersFile",
+        "title": "Open CODEOWNERS File at Matching Rule",
+        "category": "CODEOWNERS Status"
+      }
+    ],
     "configuration": {
       "title": "CODEOWNERS Status",
       "properties": {
@@ -37,6 +44,11 @@
           },
           "default": [],
           "description": "Additional paths to search for CODEOWNERS files (relative to workspace root)"
+        },
+        "codeowners.allowMissingOwners": {
+          "type": "boolean",
+          "default": true,
+          "description": "Allow CODEOWNERS lines with path patterns but no owners (indicates files can be approved by anyone)"
         }
       }
     }
