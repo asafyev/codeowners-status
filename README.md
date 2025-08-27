@@ -1,71 +1,80 @@
-# codeowners README
+# CODEOWNERS Status
 
-This is the README for your extension "CODEOWNERS status". After writing up a brief description, we recommend including the following sections.
+A VS Code extension that displays code ownership information from CODEOWNERS files directly in the status bar.
 
 ## Features
 
-Describe specific features of your extension including screenshots of your extension in action. Image paths are relative to this README file.
+- **Status Bar Integration**: Shows the owners of the currently open file in the VS Code status bar
+- **Interactive Navigation**: Click the status bar to jump directly to the relevant line in your CODEOWNERS file
+- **Multiple CODEOWNERS Locations**: Supports CODEOWNERS files in root directory and `.github/` folder
+- **Flexible Ownership Rules**: Option to treat files without explicit owners as "open for approval by anyone"
+- **Real-time Updates**: Automatically updates when you switch files or modify CODEOWNERS
 
-For example if there is an image subfolder under your extension project workspace:
+## How It Works
 
-\!\[feature X\]\(images/feature-x.png\)
+When you open a file, the extension:
+1. Finds the matching pattern in your CODEOWNERS file
+2. Displays the owners in the status bar (e.g., `👥 Owners: @team1, @team2`)
+3. Makes the status bar clickable to navigate to the exact CODEOWNERS rule
 
-> Tip: Many popular extensions utilize animations. This is an excellent way to show off your extension! We recommend short, focused animations that are easy to follow.
+## Status Bar Indicators
 
-## Requirements
-
-If you have any requirements or dependencies, add a section describing those and how to install and configure them.
+- `👥 Owners: @team1, @team2` - File has specific owners (clickable)
+- `👥 No owners` - File matches a pattern but has no explicit owners (clickable)
+- `👥 No owners found` - No matching pattern found (not clickable)
 
 ## Extension Settings
 
-Include if your extension adds any VS Code settings through the `contributes.configuration` extension point.
-
-For example:
-
 This extension contributes the following settings:
 
-* `myExtension.enable`: Enable/disable this extension.
-* `myExtension.thing`: Set to `blah` to do something.
+- `codeowners.showDebugLogs`: Show debug logs in output channel (default: `false`)
+- `codeowners.statusBarPriority`: Priority of the status bar item, higher numbers appear more to the left (default: `100`)
+- `codeowners.additionalCodeownersPaths`: Additional paths to search for CODEOWNERS files, relative to workspace root (default: `[]`)
+- `codeowners.allowMissingOwners`: Allow CODEOWNERS lines with path patterns but no owners, indicates files can be approved by anyone (default: `true`)
 
-## Known Issues
+## Example Configuration
 
-Calling out known issues can help limit users opening duplicate issues against your extension.
+```json
+{
+  "codeowners.showDebugLogs": false,
+  "codeowners.statusBarPriority": 1,
+  "codeowners.additionalCodeownersPaths": ["docs/CODEOWNERS"],
+  "codeowners.allowMissingOwners": true
+}
+```
+
+## CODEOWNERS File Support
+
+The extension supports standard CODEOWNERS syntax:
+
+```
+# Global owners
+* @global-team
+
+# Frontend files
+/src/components/** @frontend-team
+/src/styles/** @frontend-team @design-team
+
+# Backend files
+/src/api/** @backend-team
+/src/database/** @backend-team @dba-team
+
+# Files without specific owners (anyone can approve)
+/scripts/
+/docs/
+```
+
+## Requirements
+
+- A CODEOWNERS file in your repository root or `.github/` directory
+- VS Code 1.99.0 or higher
 
 ## Release Notes
 
-Users appreciate release notes as you update your extension.
+### 0.0.1
 
-### 1.0.0
-
-Initial release of ...
-
-### 1.0.1
-
-Fixed issue #.
-
-### 1.1.0
-
-Added features X, Y, and Z.
+Initial release of CODEOWNERS Status extension.
 
 ---
 
-## Following extension guidelines
-
-Ensure that you've read through the extensions guidelines and follow the best practices for creating your extension.
-
-* [Extension Guidelines](https://code.visualstudio.com/api/references/extension-guidelines)
-
-## Working with Markdown
-
-You can author your README using Visual Studio Code. Here are some useful editor keyboard shortcuts:
-
-* Split the editor (`Cmd+\` on macOS or `Ctrl+\` on Windows and Linux).
-* Toggle preview (`Shift+Cmd+V` on macOS or `Shift+Ctrl+V` on Windows and Linux).
-* Press `Ctrl+Space` (Windows, Linux, macOS) to see a list of Markdown snippets.
-
-## For more information
-
-* [Visual Studio Code's Markdown Support](http://code.visualstudio.com/docs/languages/markdown)
-* [Markdown Syntax Reference](https://help.github.com/articles/markdown-basics/)
-
-**Enjoy!**
+**Enjoy better code ownership visibility!**
